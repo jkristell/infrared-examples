@@ -9,6 +9,7 @@ edition = "2018"
 cortex-m = "0.6"
 cortex-m-rt = "0.6.7"
 rtt-target = { version = "0.2.2", features = ["cortex-m"] }
+panic-rtt-target = { version ="0.1.1", features = ["cortex-m"] }
 stm32f1xx-hal = { version = "0.6", features = ["rt", "stm32f103", "medium", "stm32-usbd"] }
 usb-device = "0.2.5"
 # Use git until the MediaKeyboard support is released
