@@ -22,7 +22,7 @@ use usbd_hid::{
 };
 
 use cortex_m::peripheral::DWT;
-use infrared::{hal::PeriodicReceiver, protocols::Nec, remotes::nec::SpecialForMp3, Button};
+use infrared::{hal::PeriodicReceiver, protocols::nec::NecApple, remotes::nec::Apple2009, Button};
 
 use rtic::cyccnt::{Instant, U32Ext};
 
@@ -34,7 +34,7 @@ const APP: () = {
         usb_dev: UsbDevice<'static, UsbBusType>,
         usb_kbd: HIDClass<'static, UsbBusType>,
         timer: CountDownTimer<TIM2>,
-        receiver: PeriodicReceiver<Nec, RecvPin>,
+        receiver: PeriodicReceiver<NecApple, RecvPin>,
     }
 
     #[init]
@@ -133,7 +133,7 @@ const APP: () = {
 
         timer.clear_update_interrupt_flag();
 
-        match receiver.poll_button::<SpecialForMp3>() {
+        match receiver.poll_button::<Apple2009>() {
             Ok(Some(button)) => {
                 rprintln!("Received: {:?}", button);
 
@@ -200,10 +200,10 @@ fn send_keycode(kbd: &HIDClass<UsbBusType>, key: MediaKey) {
 fn button_to_mediakey(b: Button) -> MediaKey {
     match b {
         Button::Play_Paus => MediaKey::PlayPause,
-        Button::Plus => MediaKey::VolumeIncrement,
-        Button::Minus => MediaKey::VolumeDecrement,
-        Button::Next => MediaKey::NextTrack,
-        Button::Prev => MediaKey::PrevTrack,
+        Button::Up => MediaKey::VolumeIncrement,
+        Button::Down => MediaKey::VolumeDecrement,
+        Button::Right => MediaKey::NextTrack,
+        Button::Left => MediaKey::PrevTrack,
         Button::Stop => MediaKey::Stop,
         _ => MediaKey::Zero,
     }

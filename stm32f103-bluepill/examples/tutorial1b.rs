@@ -37,7 +37,7 @@ impl RemoteControl for Rc6Tv {
     const DEVTYPE: DeviceType = DeviceType::TV;
     const ADDRESS: u32 = 0;
     type Cmd = Rc6Command;
-    const BUTTONS: &'static [(u8, Button)] = &[
+    const BUTTONS: &'static [(u32, Button)] = &[
         // Cmdid to Button mappings
         (1, Button::One),
         (2, Button::Two),

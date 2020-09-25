@@ -15,10 +15,12 @@ use stm32f1xx_hal::{
 #[allow(unused_imports)]
 use infrared::{
     hal::PeriodicReceiver,
-    protocols::Nec,
+    protocols::{Nec},
     remotes::{nec::*, rc5::*},
     Button,
 };
+use infrared::protocols::nec::{NecApple, NecDebug};
+use infrared::RemoteControl;
 
 // Pin connected to the receiver
 type RecvPin = PB8<Input<Floating>>;
@@ -27,7 +29,7 @@ const SAMPLERATE: u32 = 20_000;
 // Our timer. Needs to be accessible in the interrupt handler.
 static mut TIMER: Option<CountDownTimer<TIM2>> = None;
 // Our Infrared receiver
-static mut RECEIVER: Option<PeriodicReceiver<Nec, RecvPin>> = None;
+static mut RECEIVER: Option<PeriodicReceiver<NecDebug, RecvPin>> = None;
 
 #[entry]
 fn main() -> ! {
@@ -78,12 +80,20 @@ fn main() -> ! {
 fn TIM2() {
     let receiver = unsafe { RECEIVER.as_mut().unwrap() };
 
-    if let Ok(Some(button)) = receiver.poll_button::<SpecialForMp3>() {
-        match button {
-            Button::Play_Paus => rprintln!("Play was pressed!"),
-            Button::Power => rprintln!("Power on/off"),
-            _ => rprintln!("Button: {:?}", button),
-        };
+    if let Ok(Some(cmd)) = receiver.poll() {
+
+        rprintln!("{:?}", cmd);
+
+        /*
+        if let Some(button) = Apple2009::decode(cmd) {
+            match button {
+                Button::Play_Paus => rprintln!("Play was pressed!"),
+                Button::Power => rprintln!("Power on/off"),
+                _ => rprintln!("Button: {:?}", button),
+            };
+        }
+
+         */
     }
 
     // Clear the interrupt

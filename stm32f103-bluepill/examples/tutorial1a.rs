@@ -13,7 +13,7 @@ use rtt_target::{rprintln, rtt_init_print};
 use panic_rtt_target as _;
 
 
-use infrared::{Command, protocols::Rc6, hal::PeriodicReceiver};
+use infrared::{protocols::Rc6, hal::PeriodicReceiver};
 
 // Sample rate
 const TIMER_FREQ: u32 = 20_000;
@@ -75,7 +75,7 @@ fn TIM2() {
     let receiver = unsafe { RECEIVER.as_mut().unwrap() };
 
     if let Ok(Some(cmd)) = receiver.poll() {
-        rprintln!("Cmd: {} {}", cmd.address(), cmd.data());
+        rprintln!("Cmd: {} {}", cmd.addr, cmd.cmd);
     }
 
     // Clear the interrupt

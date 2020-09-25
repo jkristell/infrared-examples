@@ -90,7 +90,7 @@ fn TIM2() {
         let cmd = Rc5CdPlayer::encode(Button::Next).unwrap();
         let r = transmitter.load(&cmd);
         rprintln!("Command loaded? {:?}", r);
-    }
 
-    transmitter.tick();
+        transmitter.tick();
+    }
 }

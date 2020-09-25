@@ -23,7 +23,7 @@ type RecvPin = PB8<Input<Floating>>;
 
 const SAMPLERATE: u32 = 20_000;
 static mut TIMER: Option<CountDownTimer<TIM2>> = None;
-static mut RECEIVER: Option<PeriodicReceiver5<Nec, Nec<NecSamsung>, Rc5, Rc6, Sbp, RecvPin>> = None;
+static mut RECEIVER: Option<PeriodicReceiver5<Nec, NecSamsung, Rc5, Rc6, Sbp, RecvPin>> = None;
 
 #[entry]
 fn main() -> ! {
