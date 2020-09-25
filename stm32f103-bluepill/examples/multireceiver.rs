@@ -1,10 +1,9 @@
 #![no_std]
 #![no_main]
-#![allow(deprecated)]
 
-use cortex_m::asm;
 use cortex_m_rt::entry;
 use rtt_target::{rprintln, rtt_init_print};
+use panic_rtt_target as _;
 use stm32f1xx_hal::{
     gpio::{gpiob::PB8, Floating, Input},
     pac,
@@ -15,7 +14,7 @@ use stm32f1xx_hal::{
 
 use infrared::{
     hal::PeriodicReceiver5,
-    protocols::{Nec, NecSamsung, Rc5, Rc6, Sbp},
+    protocols::{Nec, Rc5, Rc6, Sbp, nec::NecSamsung},
     remotes::rc5::Rc5CdPlayer,
     RemoteControl,
 };
@@ -24,29 +23,17 @@ type RecvPin = PB8<Input<Floating>>;
 
 const SAMPLERATE: u32 = 20_000;
 static mut TIMER: Option<CountDownTimer<TIM2>> = None;
-static mut RECEIVER: Option<PeriodicReceiver5<Nec, NecSamsung, Rc5, Rc6, Sbp, RecvPin>> = None;
-
-#[panic_handler]
-fn panic(info: &core::panic::PanicInfo) -> ! {
-    rprintln!("{}", info);
-    exit()
-}
-
-fn exit() -> ! {
-    loop {
-        asm::bkpt() // halt = exit probe-run
-    }
-}
+static mut RECEIVER: Option<PeriodicReceiver5<Nec, Nec<NecSamsung>, Rc5, Rc6, Sbp, RecvPin>> = None;
 
 #[entry]
 fn main() -> ! {
     rtt_init_print!();
 
-    let mut core = cortex_m::Peripherals::take().unwrap();
-    let device = pac::Peripherals::take().unwrap();
+    let _cp = cortex_m::Peripherals::take().unwrap();
+    let d = pac::Peripherals::take().unwrap();
 
-    let mut flash = device.FLASH.constrain();
-    let mut rcc = device.RCC.constrain();
+    let mut flash = d.FLASH.constrain();
+    let mut rcc = d.RCC.constrain();
 
     let clocks = rcc
         .cfgr
@@ -55,11 +42,11 @@ fn main() -> ! {
         .pclk1(24.mhz())
         .freeze(&mut flash.acr);
 
-    let mut gpiob = device.GPIOB.split(&mut rcc.apb2);
+    let mut gpiob = d.GPIOB.split(&mut rcc.apb2);
     let inpin = gpiob.pb8.into_floating_input(&mut gpiob.crh);
 
     let mut timer =
-        Timer::tim2(device.TIM2, &clocks, &mut rcc.apb1).start_count_down(SAMPLERATE.hz());
+        Timer::tim2(d.TIM2, &clocks, &mut rcc.apb1).start_count_down(SAMPLERATE.hz());
 
     timer.listen(Event::Update);
 
@@ -73,7 +60,7 @@ fn main() -> ! {
     }
 
     // Enable the timer interrupt
-    core.NVIC.enable(pac::Interrupt::TIM2);
+    unsafe { cortex_m::peripheral::NVIC::unmask(pac::Interrupt::TIM2); }
 
     rprintln!("Ready!");
 
