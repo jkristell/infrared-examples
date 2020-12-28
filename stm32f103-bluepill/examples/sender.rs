@@ -88,8 +88,8 @@ fn TIM2() {
 
     if transmitter.counter % (TIMER_FREQ * 2) == 0 {
         let cmd = Rc5CdPlayer::encode(Button::Next).unwrap();
-        transmitter.load(cmd);
-        rprintln!("Loaded cmd");
+        let r = transmitter.load(&cmd);
+        rprintln!("Command loaded? {:?}", r);
     }
 
     transmitter.tick();
