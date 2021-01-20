@@ -18,7 +18,7 @@ use infrared::{
     RemoteControl,
     DeviceType,
     hal::PeriodicReceiver,
-    protocols::rc6::{Rc6, Rc6Cmd},
+    protocols::rc6::{Rc6, Rc6Command},
 };
 
 // Sample rate
@@ -36,7 +36,7 @@ impl RemoteControl for Rc6Tv {
     const MODEL: &'static str = "Rc6 Tv";
     const DEVTYPE: DeviceType = DeviceType::TV;
     const ADDRESS: u32 = 0;
-    type Cmd = Rc6Cmd;
+    type Cmd = Rc6Command;
     const BUTTONS: &'static [(u8, Button)] = &[
         // Cmdid to Button mappings
         (1, Button::One),

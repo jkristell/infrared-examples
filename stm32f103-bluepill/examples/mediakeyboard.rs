@@ -12,6 +12,7 @@ use stm32f1xx_hal::{
     timer::{CountDownTimer, Event, Timer},
     usb::{Peripheral, UsbBus, UsbBusType},
 };
+use panic_rtt_target as _;
 
 use usb_device::{bus, prelude::*};
 
@@ -26,18 +27,6 @@ use infrared::{hal::PeriodicReceiver, protocols::Nec, remotes::nec::SpecialForMp
 use rtic::cyccnt::{Instant, U32Ext};
 
 type RecvPin = PB8<Input<Floating>>;
-
-#[panic_handler]
-fn panic(info: &core::panic::PanicInfo) -> ! {
-    rprintln!("{}", info);
-    exit()
-}
-
-fn exit() -> ! {
-    loop {
-        asm::bkpt() // halt = exit probe-run
-    }
-}
 
 #[app(device = stm32f1xx_hal::stm32, peripherals = true, monotonic = rtic::cyccnt::CYCCNT)]
 const APP: () = {

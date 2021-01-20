@@ -1,6 +1,6 @@
 [package]
 name = "infrared-examples"
-version = "0.1.0"
+version = "0.8.0"
 authors = ["Johan Kristell <johan@jott.se>"]
 publish = false
 edition = "2018"
@@ -16,7 +16,7 @@ usb-device = "0.2.5"
 usbd-hid = { git = "https://github.com/twitchyliquid64/usbd-hid.git", rev = "42fff0b8" }
 embedded-hal = "0.2"
 cortex-m-rtic = "0.5.5"
-infrared = "0.7"
+infrared =  "0.8"
 
 [profile.release]
 codegen-units = 1
@@ -25,3 +25,5 @@ incremental = false
 debug = true
 lto = true
 
+[patch.crates-io]
+infrared = { git = "https://github.com/jkristell/infrared", branch="next" }
