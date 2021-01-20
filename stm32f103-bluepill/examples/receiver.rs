@@ -29,7 +29,7 @@ const SAMPLERATE: u32 = 20_000;
 // Our timer. Needs to be accessible in the interrupt handler.
 static mut TIMER: Option<CountDownTimer<TIM2>> = None;
 // Our Infrared receiver
-static mut RECEIVER: Option<PeriodicReceiver<NecDebug, RecvPin>> = None;
+static mut RECEIVER: Option<PeriodicReceiver<NecApple, RecvPin>> = None;
 
 #[entry]
 fn main() -> ! {
@@ -84,7 +84,6 @@ fn TIM2() {
 
         rprintln!("{:?}", cmd);
 
-        /*
         if let Some(button) = Apple2009::decode(cmd) {
             match button {
                 Button::Play_Paus => rprintln!("Play was pressed!"),
@@ -92,8 +91,6 @@ fn TIM2() {
                 _ => rprintln!("Button: {:?}", button),
             };
         }
-
-         */
     }
 
     // Clear the interrupt
