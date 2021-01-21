@@ -21,6 +21,7 @@ use infrared::{
 };
 use infrared::protocols::nec::{NecApple, NecDebug};
 use infrared::RemoteControl;
+use infrared::protocols::nec::cmds::NecAppleCommand;
 
 // Pin connected to the receiver
 type RecvPin = PB8<Input<Floating>>;
@@ -82,7 +83,7 @@ fn TIM2() {
 
     if let Ok(Some(cmd)) = receiver.poll() {
 
-        rprintln!("{:?}", cmd);
+        rprintln!("{:?}", core::mem::size_of::<NecAppleCommand>());
 
         if let Some(button) = Apple2009::decode(cmd) {
             match button {

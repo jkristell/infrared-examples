@@ -15,10 +15,10 @@ usb-device = "0.2.5"
 usbd-hid = "0.4.5"
 embedded-hal = "0.2"
 cortex-m-rtic = "0.5.5"
-#infrared =  "0.8"
-infrared = { path = "../../infrared" }
+infrared =  "0.8"
 
-
+[patch.crates-io]
+infrared = { git = "https://github.com/jkristell/infrared", branch="wip-r0.9" }
 
 [profile.release]
 codegen-units = 1
