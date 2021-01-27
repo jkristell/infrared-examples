@@ -3,6 +3,7 @@
 
 use cortex_m::asm;
 use embedded_hal::digital::v2::OutputPin;
+use panic_rtt_target as _;
 use rtic::app;
 use rtt_target::{rprintln, rtt_init_print};
 use stm32f1xx_hal::{
@@ -12,7 +13,6 @@ use stm32f1xx_hal::{
     timer::{CountDownTimer, Event, Timer},
     usb::{Peripheral, UsbBus, UsbBusType},
 };
-use panic_rtt_target as _;
 
 use usb_device::{bus, prelude::*};
 
@@ -22,7 +22,9 @@ use usbd_hid::{
 };
 
 use cortex_m::peripheral::DWT;
-use infrared::{hal::PeriodicReceiver, protocols::nec::NecApple, remotes::nec::Apple2009, Button};
+use infrared::{
+    protocols::nec::NecApple, remotecontrol::Button, remotes::nec::Apple2009, PeriodicReceiver,
+};
 
 use rtic::cyccnt::{Instant, U32Ext};
 

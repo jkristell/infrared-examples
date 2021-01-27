@@ -2,18 +2,17 @@
 #![no_main]
 
 use cortex_m_rt::entry;
+use panic_rtt_target as _;
+use rtt_target::{rprintln, rtt_init_print};
 use stm32f1xx_hal::{
     gpio::{gpiob::PB8, Floating, Input},
     pac,
     prelude::*,
     stm32::{interrupt, TIM2},
-    timer::{Event, Timer, CountDownTimer},
+    timer::{CountDownTimer, Event, Timer},
 };
-use rtt_target::{rprintln, rtt_init_print};
-use panic_rtt_target as _;
 
-
-use infrared::{protocols::Rc6, hal::PeriodicReceiver};
+use infrared::{hal::PeriodicReceiver, protocols::Rc6};
 
 // Sample rate
 const TIMER_FREQ: u32 = 20_000;
@@ -45,8 +44,8 @@ fn main() -> ! {
     let mut gpiob = device.GPIOB.split(&mut rcc.apb2);
     let pin = gpiob.pb8.into_floating_input(&mut gpiob.crh);
 
-    let mut timer = Timer::tim2(device.TIM2, &clocks, &mut rcc.apb1)
-        .start_count_down(TIMER_FREQ.hz());
+    let mut timer =
+        Timer::tim2(device.TIM2, &clocks, &mut rcc.apb1).start_count_down(TIMER_FREQ.hz());
 
     timer.listen(Event::Update);
 

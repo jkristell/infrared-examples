@@ -2,8 +2,8 @@
 #![no_main]
 
 use cortex_m_rt::entry;
-use rtt_target::{rprintln, rtt_init_print};
 use panic_rtt_target as _;
+use rtt_target::{rprintln, rtt_init_print};
 use stm32f1xx_hal::{
     gpio::{gpiob::PB8, Floating, Input},
     pac,
@@ -14,9 +14,9 @@ use stm32f1xx_hal::{
 
 use infrared::{
     hal::PeriodicReceiver5,
-    protocols::{Nec, Rc5, Rc6, Sbp, nec::NecSamsung},
+    protocols::{nec::NecSamsung, Nec, Rc5, Rc6, Sbp},
+    remotecontrol::RemoteControl,
     remotes::rc5::Rc5CdPlayer,
-    RemoteControl,
 };
 
 type RecvPin = PB8<Input<Floating>>;
@@ -45,8 +45,7 @@ fn main() -> ! {
     let mut gpiob = d.GPIOB.split(&mut rcc.apb2);
     let inpin = gpiob.pb8.into_floating_input(&mut gpiob.crh);
 
-    let mut timer =
-        Timer::tim2(d.TIM2, &clocks, &mut rcc.apb1).start_count_down(SAMPLERATE.hz());
+    let mut timer = Timer::tim2(d.TIM2, &clocks, &mut rcc.apb1).start_count_down(SAMPLERATE.hz());
 
     timer.listen(Event::Update);
 
@@ -60,7 +59,9 @@ fn main() -> ! {
     }
 
     // Enable the timer interrupt
-    unsafe { cortex_m::peripheral::NVIC::unmask(pac::Interrupt::TIM2); }
+    unsafe {
+        cortex_m::peripheral::NVIC::unmask(pac::Interrupt::TIM2);
+    }
 
     rprintln!("Ready!");
 

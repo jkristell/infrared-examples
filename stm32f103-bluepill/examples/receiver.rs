@@ -2,8 +2,8 @@
 #![no_main]
 
 use cortex_m_rt::entry;
-use rtt_target::{rprintln, rtt_init_print};
 use panic_rtt_target as _;
+use rtt_target::{rprintln, rtt_init_print};
 use stm32f1xx_hal::{
     gpio::{gpiob::PB8, Floating, Input},
     pac,
@@ -14,14 +14,14 @@ use stm32f1xx_hal::{
 
 #[allow(unused_imports)]
 use infrared::{
-    hal::PeriodicReceiver,
-    protocols::{Nec},
+    protocols::{
+        nec::{NecApple, NecAppleCommand, NecDebug},
+        Nec,
+    },
+    remotecontrol::{AsButton, Button, RemoteControl},
     remotes::{nec::*, rc5::*},
-    Button,
+    PeriodicReceiver,
 };
-use infrared::protocols::nec::{NecApple, NecDebug};
-use infrared::RemoteControl;
-use infrared::protocols::nec::cmds::NecAppleCommand;
 
 // Pin connected to the receiver
 type RecvPin = PB8<Input<Floating>>;
@@ -52,8 +52,7 @@ fn main() -> ! {
     let mut gpiob = d.GPIOB.split(&mut rcc.apb2);
     let pin = gpiob.pb8.into_floating_input(&mut gpiob.crh);
 
-    let mut timer =
-        Timer::tim2(d.TIM2, &clocks, &mut rcc.apb1).start_count_down(SAMPLERATE.hz());
+    let mut timer = Timer::tim2(d.TIM2, &clocks, &mut rcc.apb1).start_count_down(SAMPLERATE.hz());
 
     timer.listen(Event::Update);
 
@@ -82,9 +81,6 @@ fn TIM2() {
     let receiver = unsafe { RECEIVER.as_mut().unwrap() };
 
     if let Ok(Some(cmd)) = receiver.poll() {
-
-        rprintln!("{:?}", core::mem::size_of::<NecAppleCommand>());
-
         if let Some(button) = Apple2009::decode(cmd) {
             match button {
                 Button::Play_Paus => rprintln!("Play was pressed!"),
