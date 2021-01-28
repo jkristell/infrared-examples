@@ -4,21 +4,19 @@
 use cortex_m_rt::entry;
 use stm32f1xx_hal::{
     gpio::{gpiob::PB8, Floating, Input},
-    prelude::*,
     pac::{self, interrupt, TIM2},
-    timer::{Event, Timer, CountDownTimer},
+    prelude::*,
+    timer::{CountDownTimer, Event, Timer},
 };
 
-use rtt_target::{rprintln, rtt_init_print};
 use panic_rtt_target as _;
-
+use rtt_target::{rprintln, rtt_init_print};
 
 use infrared::{
-    Button,
-    RemoteControl,
-    DeviceType,
     hal::PeriodicReceiver,
     protocols::rc6::{Rc6, Rc6Command},
+    remotecontrol::{Button, DeviceType, RemoteControl},
+    ProtocolId,
 };
 
 // Sample rate
@@ -35,9 +33,10 @@ struct Rc6Tv;
 impl RemoteControl for Rc6Tv {
     const MODEL: &'static str = "Rc6 Tv";
     const DEVTYPE: DeviceType = DeviceType::TV;
+    const PROTOCOL: ProtocolId = ProtocolId::Rc6;
     const ADDRESS: u32 = 0;
     type Cmd = Rc6Command;
-    const BUTTONS: &'static [(u8, Button)] = &[
+    const BUTTONS: &'static [(u32, Button)] = &[
         // Cmdid to Button mappings
         (1, Button::One),
         (2, Button::Two),
@@ -54,7 +53,6 @@ impl RemoteControl for Rc6Tv {
         (60, Button::Teletext),
     ];
 }
-
 
 #[entry]
 fn main() -> ! {
@@ -75,8 +73,8 @@ fn main() -> ! {
     let mut gpiob = device.GPIOB.split(&mut rcc.apb2);
     let pin = gpiob.pb8.into_floating_input(&mut gpiob.crh);
 
-    let mut timer = Timer::tim2(device.TIM2, &clocks, &mut rcc.apb1)
-        .start_count_down(TIMER_FREQ.hz());
+    let mut timer =
+        Timer::tim2(device.TIM2, &clocks, &mut rcc.apb1).start_count_down(TIMER_FREQ.hz());
 
     timer.listen(Event::Update);
     let receiver = PeriodicReceiver::new(pin, TIMER_FREQ);
@@ -101,7 +99,6 @@ fn main() -> ! {
 
 #[interrupt]
 fn TIM2() {
-
     let receiver = unsafe { RECEIVER.as_mut().unwrap() };
 
     if let Ok(Some(button)) = receiver.poll_button::<Rc6Tv>() {

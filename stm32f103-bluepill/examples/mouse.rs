@@ -1,11 +1,17 @@
 #![no_main]
 #![no_std]
 
-use cortex_m::asm;
+use cortex_m::{
+    asm,
+    peripheral::DWT,
+};
+
 use embedded_hal::digital::v2::OutputPin;
 use panic_rtt_target as _;
+
 use rtic::app;
 use rtt_target::{rprintln, rtt_init_print};
+
 use stm32f1xx_hal::{
     gpio::{gpiob::PB8, Floating, Input},
     pac::TIM2,
@@ -17,24 +23,33 @@ use stm32f1xx_hal::{
 use usb_device::{bus, prelude::*};
 
 use usbd_hid::{
-    descriptor::{generator_prelude::*, MediaKey, MediaKeyboardReport},
+    descriptor::{
+        MouseReport,
+        generator_prelude::*
+    },
     hid_class::HIDClass,
 };
 
-use cortex_m::peripheral::DWT;
 use infrared::{
-    protocols::nec::NecApple, remotecontrol::Button, remotes::nec::Apple2009, PeriodicReceiver,
+    protocols::nec::NecApple,
+    remotecontrol::{
+        Button,
+        RemoteControl,
+    },
+    remotes::nec::Apple2009,
+    PeriodicReceiver,
 };
 
-use rtic::cyccnt::{Instant, U32Ext};
-
+/// The pin connected to the infrared receiver module
 type RecvPin = PB8<Input<Floating>>;
+
+const SAMPLERATE: u32 = 20_000;
 
 #[app(device = stm32f1xx_hal::stm32, peripherals = true, monotonic = rtic::cyccnt::CYCCNT)]
 const APP: () = {
     struct Resources {
         usb_dev: UsbDevice<'static, UsbBusType>,
-        usb_kbd: HIDClass<'static, UsbBusType>,
+        usb_hid: HIDClass<'static, UsbBusType>,
         timer: CountDownTimer<TIM2>,
         receiver: PeriodicReceiver<NecApple, RecvPin>,
     }
@@ -83,16 +98,17 @@ const APP: () = {
 
         *USB_BUS = Some(UsbBus::new(usb));
 
-        let usb_kbd = HIDClass::new(USB_BUS.as_ref().unwrap(), MediaKeyboardReport::desc(), 64);
+        let usb_hid = HIDClass::new(USB_BUS.as_ref().unwrap(), MouseReport::desc(), 60);
 
-        let usb_dev = UsbDeviceBuilder::new(USB_BUS.as_ref().unwrap(), UsbVidPid(0x16c0, 0x27dd))
+        rprintln!("Defining USB parameters...");
+        let usb_dev = UsbDeviceBuilder::new(USB_BUS.as_ref().unwrap(), UsbVidPid(0, 0x3821))
             .manufacturer("Infrared")
-            .product("Mediakeyboard")
-            .serial_number("TEST")
-            .device_class(0x03) // HID
+            .product("Mouse")
+            .serial_number("InfraredR09")
+            .device_class(0x00)
+            .device_sub_class(0x00)
+            .device_protocol(0x00)
             .build();
-
-        let SAMPLERATE = 20_000;
 
         let mut timer =
             Timer::tim2(cx.device.TIM2, &clocks, &mut rcc.apb1).start_count_down(SAMPLERATE.hz());
@@ -105,7 +121,7 @@ const APP: () = {
 
         init::LateResources {
             usb_dev,
-            usb_kbd,
+            usb_hid,
             timer,
             receiver,
         }
@@ -119,55 +135,38 @@ const APP: () = {
         }
     }
 
-    #[task(binds = USB_HP_CAN_TX, priority = 3, resources = [usb_dev, usb_kbd])]
-    fn usb_tx(mut cx: usb_tx::Context) {
-        usb_poll(&mut cx.resources.usb_dev, &mut cx.resources.usb_kbd);
-    }
-
-    #[task(binds = USB_LP_CAN_RX0, priority = 3, resources = [usb_dev, usb_kbd])]
+    #[task(binds = USB_LP_CAN_RX0, priority = 3, resources = [usb_dev, usb_hid])]
     fn usb_rx0(mut cx: usb_rx0::Context) {
-        usb_poll(&mut cx.resources.usb_dev, &mut cx.resources.usb_kbd);
+        usb_poll(&mut cx.resources.usb_dev, &mut cx.resources.usb_hid);
     }
 
     #[task(binds = TIM2, resources = [timer, receiver, ], spawn = [keydown])]
     fn tim2_irq(cx: tim2_irq::Context) {
+        static mut REPEATS: u32 = 0;
         let tim2_irq::Resources { timer, receiver } = cx.resources;
 
         timer.clear_update_interrupt_flag();
 
-        match receiver.poll_button::<Apple2009>() {
-            Ok(Some(button)) => {
-                rprintln!("Received: {:?}", button);
+        if let Ok(Some(cmd)) = receiver.poll() {
+            let is_repeated = cmd.repeat;
 
-                let key = button_to_mediakey(button);
-
-                if let Err(err) = cx.spawn.keydown(key) {
-                    rprintln!("Failed to spawn keydown: {:?}", err);
+            if let Some(button) = Apple2009::decode(cmd) {
+                if is_repeated {
+                    *REPEATS += 1;
+                } else {
+                    *REPEATS = 0;
                 }
-            }
-            Ok(None) => {}
-            Err(err) => {
-                rprintln!("Error: {:?}", err);
+
+                rprintln!("Received: {:?}, repeat: {}", button, *REPEATS);
+                let report = button_to_mousereport(button, *REPEATS);
+                cx.spawn.keydown(report).ok();
             }
         }
     }
 
-    #[task(resources = [usb_kbd], schedule = [keyup])]
-    fn keydown(mut cx: keydown::Context, key: MediaKey) {
-        rprintln!("keydown  @ {:?}", Instant::now());
-        cx.resources.usb_kbd.lock(|kbd| send_keycode(kbd, key));
-
-        if let Err(err) = cx.schedule.keyup(Instant::now() + 4_000_000.cycles()) {
-            rprintln!("Failed to schedule keyup: {:?}", err);
-        }
-    }
-
-    #[task(resources = [usb_kbd])]
-    fn keyup(mut cx: keyup::Context) {
-        rprintln!("keyup  @ {:?}", Instant::now());
-        cx.resources
-            .usb_kbd
-            .lock(|kbd| send_keycode(kbd, MediaKey::Zero));
+    #[task(resources = [usb_hid])]
+    fn keydown(mut cx: keydown::Context, mr: MouseReport) {
+        cx.resources.usb_hid.lock(|kbd| send_mousereport(kbd, mr));
     }
 
     extern "C" {
@@ -177,16 +176,12 @@ const APP: () = {
 
 fn usb_poll<B: bus::UsbBus>(
     usb_dev: &mut UsbDevice<'static, B>,
-    usb_kbd: &mut HIDClass<'static, B>,
+    usb_hid: &mut HIDClass<'static, B>,
 ) {
-    while usb_dev.poll(&mut [usb_kbd]) {}
+    while usb_dev.poll(&mut [usb_hid]) {}
 }
 
-fn send_keycode(kbd: &HIDClass<UsbBusType>, key: MediaKey) {
-    let report = MediaKeyboardReport {
-        usage_id: key.into(),
-    };
-
+fn send_mousereport(kbd: &HIDClass<UsbBusType>, report: MouseReport) {
     loop {
         let r = kbd.push_input(&report);
         match r {
@@ -199,14 +194,30 @@ fn send_keycode(kbd: &HIDClass<UsbBusType>, key: MediaKey) {
     }
 }
 
-fn button_to_mediakey(b: Button) -> MediaKey {
-    match b {
-        Button::Play_Pause => MediaKey::PlayPause,
-        Button::Up => MediaKey::VolumeIncrement,
-        Button::Down => MediaKey::VolumeDecrement,
-        Button::Right => MediaKey::NextTrack,
-        Button::Left => MediaKey::PrevTrack,
-        Button::Stop => MediaKey::Stop,
-        _ => MediaKey::Zero,
-    }
+fn button_to_mousereport(button: Button, repeats: u32) -> MouseReport {
+
+    // A very rough acceleration
+    let steps = match repeats {
+        0 => 2,
+        r @ 1 ..= 5 => 2 << (r as i8),
+        _ => 64,
+    };
+
+    let mut buttons = 0;
+    let mut x = 0;
+    let mut y = 0;
+
+    match button {
+        Button::Play_Pause => {
+            // Hold the button long enough to get a repeat that we use to signal mouse button release
+            buttons = u8::from(repeats == 0);
+        },
+        Button::Up => y = -steps,
+        Button::Down => y = steps,
+        Button::Right => x = steps,
+        Button::Left => x = -steps,
+        _ => (),
+    };
+
+    MouseReport { buttons, x, y }
 }

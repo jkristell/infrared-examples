@@ -2,8 +2,8 @@
 #![no_main]
 
 use cortex_m_rt::entry;
-use rtt_target::{rprintln, rtt_init_print};
 use panic_rtt_target as _;
+use rtt_target::{rprintln, rtt_init_print};
 use stm32f1xx_hal::{
     gpio::{gpiob::PB8, Floating, Input},
     pac,
@@ -14,10 +14,13 @@ use stm32f1xx_hal::{
 
 #[allow(unused_imports)]
 use infrared::{
-    hal::PeriodicReceiver,
-    protocols::Nec,
+    protocols::{
+        nec::{NecApple, NecAppleCommand, NecDebug},
+        Nec,
+    },
+    remotecontrol::{AsButton, Button, RemoteControl},
     remotes::{nec::*, rc5::*},
-    Button,
+    PeriodicReceiver,
 };
 
 // Pin connected to the receiver
@@ -27,7 +30,7 @@ const SAMPLERATE: u32 = 20_000;
 // Our timer. Needs to be accessible in the interrupt handler.
 static mut TIMER: Option<CountDownTimer<TIM2>> = None;
 // Our Infrared receiver
-static mut RECEIVER: Option<PeriodicReceiver<Nec, RecvPin>> = None;
+static mut RECEIVER: Option<PeriodicReceiver<NecApple, RecvPin>> = None;
 
 #[entry]
 fn main() -> ! {
@@ -49,8 +52,7 @@ fn main() -> ! {
     let mut gpiob = d.GPIOB.split(&mut rcc.apb2);
     let pin = gpiob.pb8.into_floating_input(&mut gpiob.crh);
 
-    let mut timer =
-        Timer::tim2(d.TIM2, &clocks, &mut rcc.apb1).start_count_down(SAMPLERATE.hz());
+    let mut timer = Timer::tim2(d.TIM2, &clocks, &mut rcc.apb1).start_count_down(SAMPLERATE.hz());
 
     timer.listen(Event::Update);
 
@@ -78,12 +80,14 @@ fn main() -> ! {
 fn TIM2() {
     let receiver = unsafe { RECEIVER.as_mut().unwrap() };
 
-    if let Ok(Some(button)) = receiver.poll_button::<SpecialForMp3>() {
-        match button {
-            Button::Play_Paus => rprintln!("Play was pressed!"),
-            Button::Power => rprintln!("Power on/off"),
-            _ => rprintln!("Button: {:?}", button),
-        };
+    if let Ok(Some(cmd)) = receiver.poll() {
+        if let Some(button) = Apple2009::decode(cmd) {
+            match button {
+                Button::Play_Pause => rprintln!("Play was pressed!"),
+                Button::Power => rprintln!("Power on/off"),
+                _ => rprintln!("Button: {:?}", button),
+            };
+        }
     }
 
     // Clear the interrupt

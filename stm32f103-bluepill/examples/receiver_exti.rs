@@ -2,8 +2,8 @@
 #![no_main]
 
 use cortex_m_rt::entry;
-use rtt_target::{rprintln, rtt_init_print};
 use panic_rtt_target as _;
+use rtt_target::{rprintln, rtt_init_print};
 use stm32f1xx_hal::{
     gpio::{gpiob::PB8, Floating, Input},
     pac,
@@ -16,8 +16,8 @@ use stm32f1xx_hal::{
 use infrared::{
     hal::{EventReceiver, PeriodicReceiver},
     protocols::{Nec, Rc5},
+    remotecontrol::Button,
     remotes::{nec::*, rc5::*},
-    Button,
 };
 use stm32f1xx_hal::gpio::{Edge, ExtiPin};
 
@@ -56,8 +56,7 @@ fn main() -> ! {
     pin.enable_interrupt(&d.EXTI);
 
     // We want the maximum timeout time
-    let mut timer =
-        Timer::tim2(d.TIM2, &clocks, &mut rcc.apb1).start_count_down(1.hz());
+    let mut timer = Timer::tim2(d.TIM2, &clocks, &mut rcc.apb1).start_count_down(1.hz());
 
     timer.listen(Event::Update);
 
