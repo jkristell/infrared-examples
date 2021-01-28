@@ -201,7 +201,7 @@ fn send_keycode(kbd: &HIDClass<UsbBusType>, key: MediaKey) {
 
 fn button_to_mediakey(b: Button) -> MediaKey {
     match b {
-        Button::Play_Paus => MediaKey::PlayPause,
+        Button::Play_Pause => MediaKey::PlayPause,
         Button::Up => MediaKey::VolumeIncrement,
         Button::Down => MediaKey::VolumeDecrement,
         Button::Right => MediaKey::NextTrack,

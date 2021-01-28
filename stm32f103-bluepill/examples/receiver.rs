@@ -83,7 +83,7 @@ fn TIM2() {
     if let Ok(Some(cmd)) = receiver.poll() {
         if let Some(button) = Apple2009::decode(cmd) {
             match button {
-                Button::Play_Paus => rprintln!("Play was pressed!"),
+                Button::Play_Pause => rprintln!("Play was pressed!"),
                 Button::Power => rprintln!("Power on/off"),
                 _ => rprintln!("Button: {:?}", button),
             };

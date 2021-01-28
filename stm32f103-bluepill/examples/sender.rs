@@ -13,7 +13,7 @@ use stm32f1xx_hal::{
 
 use infrared::{
     remotecontrol::{Button, RemoteControl},
-    remotes::rc5::Rc5CdPlayer,
+    remotes::rc5::CdPlayer,
     Sender,
 };
 use panic_rtt_target as _;
@@ -88,7 +88,7 @@ fn TIM2() {
     let transmitter = unsafe { TRANSMITTER.as_mut().unwrap() };
 
     if transmitter.counter % (TIMER_FREQ * 2) == 0 {
-        let cmd = Rc5CdPlayer::encode(Button::Next).unwrap();
+        let cmd = CdPlayer::encode(Button::Next).unwrap();
         let r = transmitter.load(&cmd);
         rprintln!("Command loaded? {:?}", r);
 

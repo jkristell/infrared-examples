@@ -14,16 +14,14 @@ use stm32f1xx_hal::{
 
 use infrared::{
     hal::PeriodicReceiver5,
-    protocols::{nec::NecSamsung, Nec, Rc5, Rc6, Sbp},
-    remotecontrol::RemoteControl,
-    remotes::rc5::Rc5CdPlayer,
+    protocols::{NecSamsung, NecApple, Nec, Rc5, Rc6},
 };
 
 type RecvPin = PB8<Input<Floating>>;
 
 const SAMPLERATE: u32 = 20_000;
 static mut TIMER: Option<CountDownTimer<TIM2>> = None;
-static mut RECEIVER: Option<PeriodicReceiver5<Nec, NecSamsung, Rc5, Rc6, Sbp, RecvPin>> = None;
+static mut RECEIVER: Option<PeriodicReceiver5<Nec, NecSamsung, Rc5, Rc6, NecApple, RecvPin>> = None;
 
 #[entry]
 fn main() -> ! {
@@ -74,37 +72,22 @@ fn main() -> ! {
 fn TIM2() {
     let receiver = unsafe { RECEIVER.as_mut().unwrap() };
 
-    if let Ok((neccmd, nescmd, rc5cmd, rc6cmd, sbpcmd)) = receiver.poll() {
-        // We have a NEC Command
-        if let Some(cmd) = neccmd {
-            rprintln!("nec: {} {}", cmd.addr, cmd.cmd);
-        }
-
-        // We have Samsung-flavoured NEC Command
-        if let Some(cmd) = nescmd {
-            rprintln!("nec: {} {}", cmd.addr, cmd.cmd);
-        }
-
-        // We have a Rc5 Command
-        if let Some(cmd) = rc5cmd {
-            // Print the command if recognized as a Rc5 CD-player command
-            if let Some(decoded) = Rc5CdPlayer::decode(cmd) {
-                rprintln!("rc5(CD): {:?}", decoded);
-            } else {
-                rprintln!("rc5: {} {}", cmd.addr, cmd.cmd);
-            }
-        }
-
-        if let Some(cmd) = rc6cmd {
-            rprintln!("rc6: {} {}", cmd.addr, cmd.cmd);
-        }
-
-        if let Some(cmd) = sbpcmd {
-            rprintln!("sbp: {} {}", cmd.address, cmd.command);
-        }
+    if let Ok((neccmd, nescmd, rc5cmd, rc6cmd, applecmd)) = receiver.poll() {
+        // Print any command we found
+        print_cmd(neccmd);
+        print_cmd(nescmd);
+        print_cmd(rc5cmd);
+        print_cmd(rc6cmd);
+        print_cmd(applecmd);
     }
 
     // Clear the interrupt
     let timer = unsafe { TIMER.as_mut().unwrap() };
     timer.clear_update_interrupt_flag();
+}
+
+fn print_cmd<C: core::fmt::Debug>(cmd: Option<C>) {
+    if let Some(cmd) = cmd {
+        rprintln!("{:?}", cmd);
+    }
 }
