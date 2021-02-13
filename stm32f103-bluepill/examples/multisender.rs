@@ -3,7 +3,6 @@
 
 use cortex_m;
 use cortex_m_rt::entry;
-use rtt_target::{rprintln, rtt_init_print};
 use stm32f1xx_hal::{
     pac::{self, interrupt, TIM2, TIM4},
     prelude::*,
@@ -15,21 +14,29 @@ use infrared::{
     protocols::Rc5,
     remotecontrol::{Button, RemoteControl},
     remotes::rc5::CdPlayer,
-    Sender,
+    MultiSender,
 };
-use panic_rtt_target as _;
+use panic_halt as _;
+use infrared::protocols::{
+    Nec,
+    nec::{NecCommand},
+    rc5::sender::Rc5SenderState,
+    nec::sender::NecSenderState,
+};
 
 type PwmPin = PwmChannel<TIM4, C4>;
-const TIMER_FREQ: u32 = 20_000;
+const SAMPLERATE: u32 = 20_000;
 
 // Global timer
 static mut TIMER: Option<CountDownTimer<TIM2>> = None;
 // Transmitter
-static mut TRANSMITTER: Option<Sender<Rc5, PwmPin, u16>> = None;
+static mut TRANSMITTER: Option<MultiSender<PwmPin, u16>> = None;
+// Sender data
+static mut RC5_DATA: Option<Rc5SenderState> = None;
+static mut NEC_DATA: Option<NecSenderState> = None;
 
 #[entry]
 fn main() -> ! {
-    rtt_init_print!();
 
     let _cp = cortex_m::Peripherals::take().unwrap();
     let d = pac::Peripherals::take().unwrap();
@@ -44,7 +51,7 @@ fn main() -> ! {
         .pclk1(24.mhz())
         .freeze(&mut flash.acr);
 
-    let mut timer = Timer::tim2(d.TIM2, &clocks, &mut rcc.apb1).start_count_down(TIMER_FREQ.hz());
+    let mut timer = Timer::tim2(d.TIM2, &clocks, &mut rcc.apb1).start_count_down(SAMPLERATE.hz());
 
     timer.listen(Event::Update);
 
@@ -60,21 +67,28 @@ fn main() -> ! {
     );
 
     let mut irpin = pwm.split();
-
     irpin.set_duty(irpin.get_max_duty() / 2);
     irpin.disable();
+
+    // Create the sender
+    let sender = MultiSender::new(SAMPLERATE, irpin) ;
+
+    // Create the sender states
+    let rc5 = sender.create_state();
+    let nec = sender.create_state();
 
     // Safe because the devices are only used in the interrupt handler
     unsafe {
         TIMER.replace(timer);
-        TRANSMITTER.replace(Sender::new(TIMER_FREQ, irpin));
+        TRANSMITTER.replace(sender);
+        RC5_DATA.replace(rc5);
+        NEC_DATA.replace(nec);
     }
 
     unsafe {
         cortex_m::peripheral::NVIC::unmask(pac::Interrupt::TIM2);
     }
 
-    rprintln!("Init done");
     loop {
         continue;
     }
@@ -86,13 +100,21 @@ fn TIM2() {
     let timer = unsafe { TIMER.as_mut().unwrap() };
     timer.clear_update_interrupt_flag();
 
-    let transmitter = unsafe { TRANSMITTER.as_mut().unwrap() };
+    let sender = unsafe { TRANSMITTER.as_mut().unwrap() };
+    let rc5 = unsafe { RC5_DATA.as_mut().unwrap() };
+    let nec = unsafe { NEC_DATA.as_mut().unwrap() };
 
-    if transmitter.counter % (TIMER_FREQ * 2) == 0 {
+    if 10 % (SAMPLERATE * 2) == 0 {
         let cmd = CdPlayer::encode(Button::Next).unwrap();
-        let r = transmitter.load(&cmd);
-        rprintln!("Command loaded? {:?}", r);
+         sender.load::<Rc5>(rc5, &cmd);
 
-        transmitter.tick();
+        let cmd = NecCommand {
+            addr: 10,
+            cmd: 44,
+            repeat: false
+        };
+        sender.load::<Nec>(nec, &cmd);
+
+        sender.tick();
     }
 }
