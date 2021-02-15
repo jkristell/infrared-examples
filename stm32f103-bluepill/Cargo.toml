@@ -25,4 +25,4 @@ debug = true
 lto = true
 
 [patch.crates-io]
-infrared = { path = "../../infrared" }
+infrared = { git = "https://github.com/jkristell/infrared", branch="next" }
