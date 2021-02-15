@@ -15,7 +15,7 @@ usb-device = "0.2.5"
 usbd-hid = "0.4.5"
 embedded-hal = "0.2"
 cortex-m-rtic = "0.5.5"
-infrared =  "0.9"
+infrared =  "0.11"
 
 [profile.release]
 codegen-units = 1
@@ -24,3 +24,5 @@ incremental = false
 debug = true
 lto = true
 
+[patch.crates-io]
+infrared = { path = "../../infrared" }

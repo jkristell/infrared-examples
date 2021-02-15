@@ -12,6 +12,7 @@ use stm32f1xx_hal::{
 };
 
 use infrared::{
+    protocols::Rc5,
     remotecontrol::{Button, RemoteControl},
     remotes::rc5::CdPlayer,
     Sender,
@@ -24,7 +25,7 @@ const TIMER_FREQ: u32 = 20_000;
 // Global timer
 static mut TIMER: Option<CountDownTimer<TIM2>> = None;
 // Transmitter
-static mut TRANSMITTER: Option<Sender<PwmPin, u16>> = None;
+static mut TRANSMITTER: Option<Sender<Rc5, PwmPin, u16>> = None;
 
 #[entry]
 fn main() -> ! {
