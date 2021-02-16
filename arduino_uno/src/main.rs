@@ -1,11 +1,3 @@
-//! A basic implementation of the `millis()` function from Arduino:
-//!
-//!     https://www.arduino.cc/reference/en/language/functions/time/millis/
-//!
-//! Uses timer 0 and one of its interrupts to update a global millisecond
-//! counter.  A walkthough of this code is available here:
-//!
-//!     https://blog.rahix.de/005-avr-hal-millis/
 #![no_std]
 #![no_main]
 #![feature(abi_avr_interrupt)]
@@ -15,7 +7,6 @@ use panic_halt as _;
 use infrared::protocols::Nec;
 use arduino_uno::hal::port::mode::{Floating, Input};
 use arduino_uno::hal::port::portd::PD7;
-
 
 const TOP: u32 = 100; // (16_000_000 * 50 / 1_000_000) / 8;
 
@@ -45,7 +36,6 @@ fn TIMER0_COMPA() {
             CMD.replace(cmd);
         }
     }
-
 }
 
 // ----------------------------------------------------------------------------
@@ -76,7 +66,7 @@ fn main() -> ! {
 
     // Wait for a character and print current time once it is received
     loop {
-        let b = nb::block!(serial.read()).void_unwrap();
+        //let b = nb::block!(serial.read()).void_unwrap();
 
         if let Some(cmd) = unsafe {CMD} {
             ufmt::uwriteln!(
@@ -86,6 +76,6 @@ fn main() -> ! {
             .void_unwrap();
         }
 
-        ufmt::uwriteln!(&mut serial, "Got {} \r", b).void_unwrap();
+        //ufmt::uwriteln!(&mut serial, "Got {} \r", b).void_unwrap();
     }
 }
