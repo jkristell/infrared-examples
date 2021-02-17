@@ -2,18 +2,31 @@
 #![no_main]
 #![feature(abi_avr_interrupt)]
 
-use arduino_uno::prelude::*;
+// Adapted from from the uno-millis example from Rahix's avr-hal
+
+use avr_device::interrupt::Mutex;
 use panic_halt as _;
-use infrared::protocols::Nec;
+
+use arduino_uno::prelude::*;
 use arduino_uno::hal::port::mode::{Floating, Input};
 use arduino_uno::hal::port::portd::PD7;
+
+use core::cell::Cell;
+
+use infrared::protocols::{
+    Nec,
+    nec::NecCommand,
+};
 
 const TOP: u32 = 100; // (16_000_000 * 50 / 1_000_000) / 8;
 
 type ReceiverPin = PD7<Input<Floating>>;
-static mut RECEIVER: Option<infrared::PeriodicReceiver<Nec, ReceiverPin>> = None;
-static mut CMD: Option<infrared::protocols::nec::NecCommand> = None;
 
+static mut RECEIVER: Option<infrared::PeriodicReceiver<Nec, ReceiverPin>> = None;
+
+static CMD: Mutex<Cell<Option<NecCommand>>> = Mutex::new(Cell::new(None));
+
+/// Setup the 20 Khz timer
 fn timer_init(tc0: arduino_uno::pac::TC0) {
     // Configure the timer for the above interval (in CTC mode)
     // and enable its interrupt.
@@ -27,15 +40,18 @@ fn timer_init(tc0: arduino_uno::pac::TC0) {
 #[avr_device::interrupt(atmega328p)]
 fn TIMER0_COMPA() {
 
-    let recv = unsafe {
-        RECEIVER.as_mut().unwrap()
-    };
+    let recv = unsafe { RECEIVER.as_mut().unwrap() };
 
     if let Ok(Some(cmd)) = recv.poll() {
-        unsafe {
-            CMD.replace(cmd);
-        }
+        avr_device::interrupt::free(|cs| {
+            let cell = CMD.borrow(cs);
+            cell.set(Some(cmd));
+        });
     }
+}
+
+fn take_command() -> Option<NecCommand> {
+    avr_device::interrupt::free(|cs| CMD.borrow(cs).replace(None))
 }
 
 // ----------------------------------------------------------------------------
@@ -64,14 +80,13 @@ fn main() -> ! {
     // Enable interrupts globally
     unsafe { avr_device::interrupt::enable() };
 
-    // Wait for a character and print current time once it is received
     loop {
         //let b = nb::block!(serial.read()).void_unwrap();
 
-        if let Some(cmd) = unsafe {CMD} {
+        if let Some(cmd) = take_command() {
             ufmt::uwriteln!(
                 &mut serial, "{} {} {}\r",
-                 cmd.addr, cmd.cmd, cmd.repeat
+                cmd.addr, cmd.cmd, cmd.repeat
             )
             .void_unwrap();
         }

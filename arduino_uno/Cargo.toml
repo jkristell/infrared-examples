@@ -14,7 +14,7 @@ ufmt = "0.1.0"
 
 [dependencies.arduino-uno]
 git = "https://github.com/rahix/avr-hal"
-# rev = "<insert latest git-commit hash here>"
+rev = "b1aedf824fcb59078f8022d4464b2835ae4bd83a"
 
 # Configure the build for minimal size
 [profile.dev]
@@ -29,6 +29,6 @@ debug = true
 lto = true
 opt-level = "s"
 
-
 [patch.crates-io]
+ufmt = { git = "https://github.com/Rahix/ufmt.git", rev = "12225dc1678e42fecb0e8635bf80f501e24817d9" }
 infrared = { git = "https://github.com/jkristell/infrared", branch="next" }
