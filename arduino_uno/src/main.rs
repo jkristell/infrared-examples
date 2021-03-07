@@ -13,18 +13,22 @@ use arduino_uno::hal::port::portd::PD7;
 
 use core::cell::Cell;
 
-use infrared::protocols::{
-    Nec,
-    nec::NecCommand,
-};
+use infrared::protocols::{Nec, nec::NecCommand, Rc5, Rc6};
+use infrared::protocols::rc5::Rc5Command;
+use infrared::protocols::rc6::Rc6Command;
+use infrared::InfraredProtocol;
+use infrared::protocols::nec::NecRawCommand;
 
 const TOP: u32 = 100; // (16_000_000 * 50 / 1_000_000) / 8;
 
 type ReceiverPin = PD7<Input<Floating>>;
 
-static mut RECEIVER: Option<infrared::PeriodicReceiver<Nec, ReceiverPin>> = None;
+type Proto = Nec<NecCommand>;
+type ProtoCmd = <Proto as InfraredProtocol>::Cmd;
 
-static CMD: Mutex<Cell<Option<NecCommand>>> = Mutex::new(Cell::new(None));
+static mut RECEIVER: Option<infrared::PeriodicReceiver<Proto, ReceiverPin>> = None;
+
+static CMD: Mutex<Cell<Option<ProtoCmd>>> = Mutex::new(Cell::new(None));
 
 /// Setup the 20 Khz timer
 fn timer_init(tc0: arduino_uno::pac::TC0) {
@@ -50,7 +54,7 @@ fn TIMER0_COMPA() {
     }
 }
 
-fn take_command() -> Option<NecCommand> {
+fn take_command() -> Option<ProtoCmd> {
     avr_device::interrupt::free(|cs| CMD.borrow(cs).replace(None))
 }
 
@@ -85,8 +89,8 @@ fn main() -> ! {
 
         if let Some(cmd) = take_command() {
             ufmt::uwriteln!(
-                &mut serial, "{} {} {}\r",
-                cmd.addr, cmd.cmd, cmd.repeat
+                &mut serial, "{} {}\r",
+                cmd.addr, cmd.cmd,
             )
             .void_unwrap();
         }
