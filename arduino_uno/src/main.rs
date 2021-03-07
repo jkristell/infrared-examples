@@ -89,8 +89,8 @@ fn main() -> ! {
 
         if let Some(cmd) = take_command() {
             ufmt::uwriteln!(
-                &mut serial, "{} {}\r",
-                cmd.addr, cmd.cmd,
+                &mut serial, "{} {} {}\r",
+                cmd.addr, cmd.cmd, cmd.repeat,
             )
             .void_unwrap();
         }
