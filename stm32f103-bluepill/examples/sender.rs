@@ -100,6 +100,5 @@ fn TIM2() {
         transmitter.tick();
 
         *COUNTER = 0;
-
     }
 }
