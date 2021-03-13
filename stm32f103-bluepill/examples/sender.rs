@@ -25,7 +25,7 @@ const TIMER_FREQ: u32 = 20_000;
 // Global timer
 static mut TIMER: Option<CountDownTimer<TIM2>> = None;
 // Transmitter
-static mut TRANSMITTER: Option<Sender<Rc5, PwmPin, u16>> = None;
+static mut TRANSMITTER: Option<Sender<Rc5, PwmPin>> = None;
 
 #[entry]
 fn main() -> ! {
@@ -82,17 +82,22 @@ fn main() -> ! {
 
 #[interrupt]
 fn TIM2() {
+    static mut COUNTER: u32 = 0;
+
+    *COUNTER = COUNTER.wrapping_add(1);
+
     // Clear the interrupt
     let timer = unsafe { TIMER.as_mut().unwrap() };
     timer.clear_update_interrupt_flag();
 
     let transmitter = unsafe { TRANSMITTER.as_mut().unwrap() };
 
-    if transmitter.counter % (TIMER_FREQ * 2) == 0 {
+    if *COUNTER == TIMER_FREQ * 2 {
         let cmd = CdPlayer::encode(Button::Next).unwrap();
         let r = transmitter.load(&cmd);
         rprintln!("Command loaded? {:?}", r);
-
         transmitter.tick();
+
+        *COUNTER = 0;
     }
 }

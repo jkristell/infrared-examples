@@ -30,7 +30,7 @@ const SAMPLERATE: u32 = 20_000;
 // Global timer
 static mut TIMER: Option<CountDownTimer<TIM2>> = None;
 // Transmitter
-static mut TRANSMITTER: Option<MultiSender<PwmPin, u16>> = None;
+static mut TRANSMITTER: Option<MultiSender<PwmPin>> = None;
 // Sender data
 static mut RC5_DATA: Option<Rc5SenderState> = None;
 static mut NEC_DATA: Option<NecSenderState> = None;

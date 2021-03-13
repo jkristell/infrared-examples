@@ -31,6 +31,3 @@ opt-level = 's'
 incremental = false
 debug = true
 lto = true
-
-[patch.crates-io]
-infrared = { path = "../../infrared" }
