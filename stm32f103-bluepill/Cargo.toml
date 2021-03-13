@@ -24,5 +24,10 @@ incremental = false
 debug = true
 lto = true
 
-[patch.crates-io]
-infrared = { git = "https://github.com/jkristell/infrared", branch="next" }
+[profile.dev]
+codegen-units = 1
+opt-level = 's'
+incremental = false
+debug = true
+lto = true
+
