@@ -16,7 +16,8 @@ use infrared::{
     remotes::rc5::CdPlayer,
     MultiSender,
 };
-use panic_halt as _;
+use panic_rtt_target as _;
+
 use infrared::protocols::{
     Nec,
     nec::{NecCommand},
@@ -37,6 +38,7 @@ static mut NEC_DATA: Option<NecSenderState> = None;
 
 #[entry]
 fn main() -> ! {
+    rtt_target::rtt_init_print!();
 
     let _cp = cortex_m::Peripherals::take().unwrap();
     let d = pac::Peripherals::take().unwrap();
