@@ -27,6 +27,7 @@ static mut TIMER: Option<CountDownTimer<TIM2>> = None;
 // Transmitter
 static mut TRANSMITTER: Option<Sender<Rc5, PwmPin>> = None;
 
+
 #[entry]
 fn main() -> ! {
     rtt_init_print!();
