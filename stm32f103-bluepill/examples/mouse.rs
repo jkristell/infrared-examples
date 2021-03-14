@@ -219,5 +219,5 @@ fn button_to_mousereport(button: Button, repeats: u32) -> MouseReport {
         _ => (),
     };
 
-    MouseReport { buttons, x, y }
+    MouseReport { buttons, x, y, wheel: 0 }
 }
