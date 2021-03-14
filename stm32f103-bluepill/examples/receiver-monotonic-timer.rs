@@ -37,7 +37,7 @@ static mut RECEIVER: Option<EventReceiver<Nec, RecvPin>> = None;
 fn main() -> ! {
     rtt_init_print!();
 
-    let mut cp = cortex_m::Peripherals::take().unwrap();
+    let cp = cortex_m::Peripherals::take().unwrap();
     let d = pac::Peripherals::take().unwrap();
 
     let mut flash = d.FLASH.constrain();
@@ -58,9 +58,7 @@ fn main() -> ! {
     pin.trigger_on_edge(&d.EXTI, Edge::RISING_FALLING);
     pin.enable_interrupt(&d.EXTI);
 
-    //Note: Remove after upgrading stm32f1xx-hal to version 0.7
-    cp.DCB.enable_trace();
-    let mono = MonoTimer::new(cp.DWT, clocks);
+    let mono = MonoTimer::new(cp.DWT, cp.DCB, clocks);
 
     let mono_freq = mono.frequency();
     let mono_freq_scaled = mono_freq.0 >> MONO_SHIFT;
