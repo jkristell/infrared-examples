@@ -65,6 +65,9 @@ fn main() -> ! {
     let mono_freq = mono.frequency();
     let mono_freq_scaled = mono_freq.0 >> MONO_SHIFT;
 
+    // Check that the frequency is in the reasonable range
+    assert!(mono_freq_scaled > 20_000 && mono_freq_scaled < 80_000);
+
     let receiver = EventReceiver::new(pin, mono_freq_scaled);
 
     // Safe because the devices are only used from in the interrupt handler
