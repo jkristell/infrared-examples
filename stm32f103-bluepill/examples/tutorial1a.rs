@@ -12,17 +12,18 @@ use stm32f1xx_hal::{
     timer::{CountDownTimer, Event, Timer},
 };
 
-use infrared::{hal::PeriodicReceiver, protocols::Rc6};
+use infrared::{Receiver, protocol::Rc6};
+use infrared::receiver::{Poll, PinInput};
 
 // Sample rate
 const TIMER_FREQ: u32 = 20_000;
 
 // Our receivertype
-type Receiver = PeriodicReceiver<Rc6, PB8<Input<Floating>>>;
+type IrReceiver = Receiver<Rc6, Poll, PinInput<PB8<Input<Floating>>>>;
 
 // Globals
 static mut TIMER: Option<CountDownTimer<TIM2>> = None;
-static mut RECEIVER: Option<Receiver> = None;
+static mut RECEIVER: Option<IrReceiver> = None;
 
 #[entry]
 fn main() -> ! {
@@ -49,7 +50,7 @@ fn main() -> ! {
 
     timer.listen(Event::Update);
 
-    let receiver = PeriodicReceiver::new(pin, TIMER_FREQ);
+    let receiver = Receiver::with_pin(TIMER_FREQ as usize, pin);
 
     // Safe because the devices are only used in the interrupt handler
     unsafe {

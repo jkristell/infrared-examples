@@ -8,30 +8,29 @@ use stm32f1xx_hal::{
     gpio::{gpiob::PB8, Floating, Input},
     pac,
     prelude::*,
-    stm32::{interrupt},
+    stm32::interrupt,
     time::MonoTimer,
 };
 
 #[allow(unused_imports)]
 use infrared::{
-    hal::{EventReceiver, PeriodicReceiver},
-    protocols::{Nec, Rc5},
-    remotecontrol::Button,
-    remotes::{nec::*, rc5::*},
+    Receiver,
+    receiver::{Event, PinInput},
+    protocol::{Nec, Rc6},
+    remotecontrol::{nec::*, rc5::*},
 };
 use stm32f1xx_hal::gpio::{Edge, ExtiPin};
 use stm32f1xx_hal::time::Instant;
 
 // Pin connected to the receiver
 type RecvPin = PB8<Input<Floating>>;
+//type IrReceiver = ConstReceiver<NecApple, Evented, PinInput<RecvPin>>
 
 // Our timer. Needs to be accessible in the interrupt handler.
 static mut MONO: Option<MonoTimer> = None;
-// The scale factor for the mono timer
-const MONO_SHIFT: u32 = 11;
 
 // Our Infrared receiver
-static mut RECEIVER: Option<EventReceiver<Nec, RecvPin>> = None;
+static mut RECEIVER: Option<Receiver<Rc6, Event, PinInput<RecvPin>>> = None;
 
 #[entry]
 fn main() -> ! {
@@ -59,14 +58,9 @@ fn main() -> ! {
     pin.enable_interrupt(&d.EXTI);
 
     let mono = MonoTimer::new(cp.DWT, cp.DCB, clocks);
-
     let mono_freq = mono.frequency();
-    let mono_freq_scaled = mono_freq.0 >> MONO_SHIFT;
 
-    // Check that the frequency is in the reasonable range
-    assert!(mono_freq_scaled > 20_000 && mono_freq_scaled < 80_000);
-
-    let receiver = EventReceiver::new(pin, mono_freq_scaled);
+    let receiver = Receiver::with_pin( mono_freq.0 as usize, pin);
 
     // Safe because the devices are only used from in the interrupt handler
     unsafe {
@@ -87,21 +81,19 @@ fn main() -> ! {
 
 #[interrupt]
 fn EXTI9_5() {
-
     static mut LAST: Option<Instant> = None;
 
     let receiver = unsafe { RECEIVER.as_mut().unwrap() };
     let mono = unsafe { MONO.as_ref().unwrap() };
 
-    if let Some(dt) = LAST.map(|i| i.elapsed() >> MONO_SHIFT) {
-        // rprintln!("dt: {:?}", dt);
+    if let Some(dt) = LAST.map(|i| i.elapsed()) {
 
-        if let Ok(Some(cmd)) = receiver.edge_event(dt) {
+        if let Ok(Some(cmd)) = receiver.event(dt as usize) {
             rprintln!("cmd: {}", cmd.cmd);
         }
     }
 
     LAST.replace(mono.now());
 
-    receiver.pin.clear_interrupt_pending_bit();
+    receiver.pin().clear_interrupt_pending_bit();
 }

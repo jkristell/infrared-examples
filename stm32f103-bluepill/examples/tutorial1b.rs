@@ -13,21 +13,22 @@ use panic_rtt_target as _;
 use rtt_target::{rprintln, rtt_init_print};
 
 use infrared::{
-    hal::PeriodicReceiver,
-    protocols::rc6::{Rc6, Rc6Command},
+    Receiver,
+    protocol::{Rc6, Rc6Command},
     remotecontrol::{Button, DeviceType, RemoteControl},
     ProtocolId,
 };
+use infrared::receiver::{Poll, PinInput};
 
 // Sample rate
 const TIMER_FREQ: u32 = 20_000;
 
 // Our receivertype
-type Receiver = PeriodicReceiver<Rc6, PB8<Input<Floating>>>;
+type IrReceiver = Receiver<Rc6, Poll, PinInput<PB8<Input<Floating>>>>;
 
 // Globals
 static mut TIMER: Option<CountDownTimer<TIM2>> = None;
-static mut RECEIVER: Option<Receiver> = None;
+static mut RECEIVER: Option<IrReceiver> = None;
 
 struct Rc6Tv;
 impl RemoteControl for Rc6Tv {
@@ -77,7 +78,7 @@ fn main() -> ! {
         Timer::tim2(device.TIM2, &clocks, &mut rcc.apb1).start_count_down(TIMER_FREQ.hz());
 
     timer.listen(Event::Update);
-    let receiver = PeriodicReceiver::new(pin, TIMER_FREQ);
+    let receiver = Receiver::with_pin(TIMER_FREQ as usize, pin);
 
     // Safe because the devices are only used in the interrupt handler
     unsafe {
@@ -101,7 +102,7 @@ fn main() -> ! {
 fn TIM2() {
     let receiver = unsafe { RECEIVER.as_mut().unwrap() };
 
-    if let Ok(Some(button)) = receiver.poll_button::<Rc6Tv>() {
+    if let Ok(Some(button)) = receiver.poll_remotecontrol::<Rc6Tv>() {
         use Button::*;
 
         match button {

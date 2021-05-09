@@ -12,16 +12,15 @@ use stm32f1xx_hal::{
     timer::{CountDownTimer, Event, Timer},
 };
 
-use infrared::{
-    hal::PeriodicReceiver5,
-    protocols::{NecSamsung, NecApple, Nec, Rc5, Rc6},
-};
+use infrared::receiver::{MultiReceiver5, PinInput, Poll};
+use infrared::protocol::*;
 
-type RecvPin = PB8<Input<Floating>>;
+type IrPin = PB8<Input<Floating>>;
+type IrReceiver = MultiReceiver5<Rc6, Nec, NecSamsung, Rc5, NecApple, Poll, PinInput<IrPin>>;
 
 const SAMPLERATE: u32 = 20_000;
 static mut TIMER: Option<CountDownTimer<TIM2>> = None;
-static mut RECEIVER: Option<PeriodicReceiver5<Nec, NecSamsung, Rc5, Rc6, NecApple, RecvPin>> = None;
+static mut RECEIVER: Option<IrReceiver> = None;
 
 #[entry]
 fn main() -> ! {
@@ -47,8 +46,7 @@ fn main() -> ! {
 
     timer.listen(Event::Update);
 
-    // Create a receiver that reacts on 3 different kinds of remote controls
-    let receiver = PeriodicReceiver5::new(inpin, SAMPLERATE);
+    let receiver = MultiReceiver5::new(SAMPLERATE as usize, PinInput(inpin));
 
     // Safe because the devices are only used in the interrupt handler
     unsafe {
