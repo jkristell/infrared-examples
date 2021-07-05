@@ -14,23 +14,26 @@ use stm32f1xx_hal::{
 
 #[allow(unused_imports)]
 use infrared::{
-    protocols::{
-        nec::{NecApple, NecAppleCommand, NecDebug},
+    protocol::{
+        NecApple,
         Nec,
     },
     remotecontrol::{AsButton, Button, RemoteControl},
-    remotes::{nec::*, rc5::*},
-    PeriodicReceiver,
+    remotecontrol::{nec::*, rc5::*},
+    Receiver,
 };
+use infrared::receiver::{PinInput, Poll};
 
 // Pin connected to the receiver
-type RecvPin = PB8<Input<Floating>>;
+type IrPin = PB8<Input<Floating>>;
+type IrReceiver = Receiver<NecApple, Poll, PinInput<IrPin>>;
+
 // Samplerate
-const SAMPLERATE: u32 = 20_000;
+const SAMPLERATE: usize = 100_000;
 // Our timer. Needs to be accessible in the interrupt handler.
 static mut TIMER: Option<CountDownTimer<TIM2>> = None;
 // Our Infrared receiver
-static mut RECEIVER: Option<PeriodicReceiver<NecApple, RecvPin>> = None;
+static mut RECEIVER: Option<IrReceiver> = None;
 
 #[entry]
 fn main() -> ! {
@@ -52,11 +55,16 @@ fn main() -> ! {
     let mut gpiob = d.GPIOB.split(&mut rcc.apb2);
     let pin = gpiob.pb8.into_floating_input(&mut gpiob.crh);
 
-    let mut timer = Timer::tim2(d.TIM2, &clocks, &mut rcc.apb1).start_count_down(SAMPLERATE.hz());
+    let mut timer = Timer::tim2(d.TIM2, &clocks, &mut rcc.apb1).start_count_down((SAMPLERATE as u32).hz());
 
     timer.listen(Event::Update);
 
-    let receiver = PeriodicReceiver::new(pin, SAMPLERATE);
+    let receiver = Receiver::builder()
+        .nec_apple()
+        .polled()
+        .resolution(SAMPLERATE)
+        .pin(pin)
+        .build();
 
     // Safe because the devices are only used from in the interrupt handler
     unsafe {
@@ -80,14 +88,20 @@ fn main() -> ! {
 fn TIM2() {
     let receiver = unsafe { RECEIVER.as_mut().unwrap() };
 
-    if let Ok(Some(cmd)) = receiver.poll() {
-        if let Some(button) = Apple2009::decode(cmd) {
-            match button {
-                Button::Play_Pause => rprintln!("Play was pressed!"),
-                Button::Power => rprintln!("Power on/off"),
-                _ => rprintln!("Button: {:?}", button),
-            };
+    let r = receiver.poll();
+
+    match r {
+        Ok(Some(cmd)) => {
+            if let Some(button) = Apple2009::decode(&cmd) {
+                match button {
+                    Button::Play_Pause => rprintln!("Play was pressed!"),
+                    Button::Power => rprintln!("Power on/off"),
+                    _ => rprintln!("{:?}", button),
+                };
+            }
         }
+        Ok(None) => {},
+        Err(err) => rprintln!("Err: {:?}", err),
     }
 
     // Clear the interrupt

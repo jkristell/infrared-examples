@@ -1,7 +1,6 @@
 #![no_std]
 #![no_main]
 
-use cortex_m;
 use cortex_m_rt::entry;
 use rtt_target::{rprintln, rtt_init_print};
 use stm32f1xx_hal::{
@@ -10,22 +9,22 @@ use stm32f1xx_hal::{
     pwm::{PwmChannel, C4},
     timer::{CountDownTimer, Event, Tim4NoRemap, Timer},
 };
-
-use infrared::{
-    protocols::Rc5,
-    remotecontrol::{Button, RemoteControl},
-    remotes::rc5::CdPlayer,
-    Sender,
-};
 use panic_rtt_target as _;
 
+use infrared::{
+    protocol::Rc5,
+    remotecontrol::{Button, RemoteControl},
+    remotecontrol::rc5::CdPlayer,
+};
+use infrared::sender::Sender;
+
 type PwmPin = PwmChannel<TIM4, C4>;
-const TIMER_FREQ: u32 = 20_000;
+const TIMER_FREQ: usize = 20_000;
 
 // Global timer
 static mut TIMER: Option<CountDownTimer<TIM2>> = None;
 // Transmitter
-static mut TRANSMITTER: Option<Sender<Rc5, PwmPin>> = None;
+static mut TRANSMITTER: Option<Sender<PwmPin, 20_000, 128>> = None;
 
 
 #[entry]
@@ -45,7 +44,7 @@ fn main() -> ! {
         .pclk1(24.mhz())
         .freeze(&mut flash.acr);
 
-    let mut timer = Timer::tim2(d.TIM2, &clocks, &mut rcc.apb1).start_count_down(TIMER_FREQ.hz());
+    let mut timer = Timer::tim2(d.TIM2, &clocks, &mut rcc.apb1).start_count_down((TIMER_FREQ as u32).hz());
 
     timer.listen(Event::Update);
 
@@ -62,13 +61,13 @@ fn main() -> ! {
 
     let mut irpin = pwm.split();
 
-    irpin.set_duty(irpin.get_max_duty() / 2);
+    irpin.set_duty(irpin.get_max_duty() / 3);
     irpin.disable();
 
     // Safe because the devices are only used in the interrupt handler
     unsafe {
         TIMER.replace(timer);
-        TRANSMITTER.replace(Sender::new(TIMER_FREQ, irpin));
+        TRANSMITTER.replace(Sender::new(irpin));
     }
 
     unsafe {
@@ -83,7 +82,7 @@ fn main() -> ! {
 
 #[interrupt]
 fn TIM2() {
-    static mut COUNTER: u32 = 0;
+    static mut COUNTER: usize = 0;
 
     *COUNTER = COUNTER.wrapping_add(1);
 
@@ -92,12 +91,13 @@ fn TIM2() {
     timer.clear_update_interrupt_flag();
 
     let transmitter = unsafe { TRANSMITTER.as_mut().unwrap() };
+    transmitter.tick();
 
     if *COUNTER == TIMER_FREQ * 2 {
-        let cmd = CdPlayer::encode(Button::Next).unwrap();
-        let r = transmitter.load(&cmd);
-        rprintln!("Command loaded? {:?}", r);
-        transmitter.tick();
+        rprintln!("Pressing button");
+
+        let cmd = CdPlayer::encode(&Button::Next).unwrap();
+        transmitter.load::<Rc5>(&cmd);
 
         *COUNTER = 0;
     }

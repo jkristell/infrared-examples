@@ -1,57 +1,63 @@
 #![no_main]
 #![no_std]
 
-use cortex_m::asm;
-use embedded_hal::digital::v2::OutputPin;
 use panic_rtt_target as _;
-use rtic::app;
-use rtt_target::{rprintln, rtt_init_print};
-use stm32f1xx_hal::{
-    gpio::{gpiob::PB8, Floating, Input},
-    pac::TIM2,
-    prelude::*,
-    timer::{CountDownTimer, Event, Timer},
-    usb::{Peripheral, UsbBus, UsbBusType},
-};
-
-use usb_device::{bus, prelude::*};
-
+use stm32f1xx_hal::usb::UsbBusType;
 use usbd_hid::{
-    descriptor::{generator_prelude::*, MediaKey, MediaKeyboardReport},
+    descriptor::{MediaKey, MediaKeyboardReport},
     hid_class::HIDClass,
 };
 
-use cortex_m::peripheral::DWT;
-use infrared::{
-    protocols::nec::NecApple, remotecontrol::Button, remotes::nec::Apple2009, PeriodicReceiver,
-};
+use infrared::remotecontrol::Button;
+use usb_device::{bus, prelude::*};
 
-use rtic::cyccnt::{Instant, U32Ext};
+#[rtic::app(device = stm32f1xx_hal::stm32, peripherals = true, dispatchers = [USART1])]
+mod app {
+    use cortex_m::asm;
+    use embedded_hal::digital::v2::OutputPin;
+    use panic_rtt_target as _;
+    use rtt_target::{rprintln, rtt_init_print};
+    use stm32f1xx_hal::{
+        gpio::{gpiob::PB8, ExtiPin, Floating, Input},
+        prelude::*,
+        usb::{Peripheral, UsbBus, UsbBusType},
+    };
+    use usbd_hid::{
+        descriptor::{generator_prelude::*, MediaKey, MediaKeyboardReport},
+        hid_class::HIDClass,
+    };
 
-type RecvPin = PB8<Input<Floating>>;
+    use usb_device::{bus, prelude::*};
 
-#[app(device = stm32f1xx_hal::stm32, peripherals = true, monotonic = rtic::cyccnt::CYCCNT)]
-const APP: () = {
+    use infrared::{protocol::NecApple, remotecontrol::nec::Apple2009, Receiver};
+
+    use dwt_systick_monotonic::DwtSystick;
+    use rtic::time::{duration::Milliseconds, Instant};
+    use stm32f1xx_hal::gpio::Edge;
+    use infrared::receiver::{PinInput, Event};
+
+    /// The pin connected to the infrared receiver module
+    type RxPin = PB8<Input<Floating>>;
+
+    #[monotonic(binds = SysTick, default = true)]
+    type InfraMono = DwtSystick<48_000_000>;
+
+    #[resources]
     struct Resources {
         usb_dev: UsbDevice<'static, UsbBusType>,
         usb_kbd: HIDClass<'static, UsbBusType>,
-        timer: CountDownTimer<TIM2>,
-        receiver: PeriodicReceiver<NecApple, RecvPin>,
+        receiver: Receiver<NecApple, Event, PinInput<crate::app::RxPin>>,
     }
 
     #[init]
-    fn init(mut cx: init::Context) -> init::LateResources {
+    fn init(mut cx: init::Context) -> (init::LateResources, init::Monotonics) {
         static mut USB_BUS: Option<bus::UsbBusAllocator<UsbBusType>> = None;
 
         rtt_init_print!();
 
-        cx.core.DCB.enable_trace();
-        // required on Cortex-M7 devices that software lock the DWT (e.g. STM32F7)
-        DWT::unlock();
-        cx.core.DWT.enable_cycle_counter();
-
         let mut flash = cx.device.FLASH.constrain();
         let mut rcc = cx.device.RCC.constrain();
+        let mut afio = cx.device.AFIO.constrain(&mut rcc.apb2);
 
         let clocks = rcc
             .cfgr
@@ -92,88 +98,86 @@ const APP: () = {
             .device_class(0x03) // HID
             .build();
 
-        let SAMPLERATE = 20_000;
-
-        let mut timer =
-            Timer::tim2(cx.device.TIM2, &clocks, &mut rcc.apb1).start_count_down(SAMPLERATE.hz());
-        timer.listen(Event::Update);
-
         let mut gpiob = cx.device.GPIOB.split(&mut rcc.apb2);
-        let pin = gpiob.pb8.into_floating_input(&mut gpiob.crh);
+        let mut pin = gpiob.pb8.into_floating_input(&mut gpiob.crh);
+        pin.make_interrupt_source(&mut afio);
+        pin.trigger_on_edge(&cx.device.EXTI, Edge::RISING_FALLING);
+        pin.enable_interrupt(&cx.device.EXTI);
 
-        let receiver = PeriodicReceiver::new(pin, SAMPLERATE);
+        let mono_clock = clocks.hclk().0;
+        rprintln!("Mono clock: {}", mono_clock);
 
-        init::LateResources {
+        let resolution = 48_000_000;
+        let receiver = Receiver::with_pin(resolution , pin);
+
+        let monot = DwtSystick::new(&mut cx.core.DCB, cx.core.DWT, cx.core.SYST, mono_clock);
+
+        let late = init::LateResources {
+            receiver,
             usb_dev,
             usb_kbd,
-            timer,
-            receiver,
-        }
+        };
+
+        (late, init::Monotonics(monot))
     }
 
     #[idle]
     fn idle(_ctx: idle::Context) -> ! {
-        rprintln!("Setup done: in idle");
+        rprintln!("Setup done. In idle");
         loop {
             continue;
         }
     }
 
-    #[task(binds = USB_HP_CAN_TX, priority = 3, resources = [usb_dev, usb_kbd])]
-    fn usb_tx(mut cx: usb_tx::Context) {
-        usb_poll(&mut cx.resources.usb_dev, &mut cx.resources.usb_kbd);
-    }
-
     #[task(binds = USB_LP_CAN_RX0, priority = 3, resources = [usb_dev, usb_kbd])]
-    fn usb_rx0(mut cx: usb_rx0::Context) {
-        usb_poll(&mut cx.resources.usb_dev, &mut cx.resources.usb_kbd);
+    fn usb_rx0(cx: usb_rx0::Context) {
+        let usb_dev = cx.resources.usb_dev;
+        let usb_kbd = cx.resources.usb_kbd;
+
+        (usb_dev, usb_kbd).lock(|usb_dev, usb_kbd| {
+            super::usb_poll(usb_dev, usb_kbd);
+        });
     }
 
-    #[task(binds = TIM2, resources = [timer, receiver, ], spawn = [keydown])]
-    fn tim2_irq(cx: tim2_irq::Context) {
-        let tim2_irq::Resources { timer, receiver } = cx.resources;
+    #[task(binds = EXTI9_5, resources = [receiver])]
+    fn ir_rx(mut cx: ir_rx::Context) {
+        static mut LAST: Option<Instant<InfraMono>> = None;
 
-        timer.clear_update_interrupt_flag();
+        let now = monotonics::InfraMono::now();
 
-        match receiver.poll_button::<Apple2009>() {
-            Ok(Some(button)) => {
-                rprintln!("Received: {:?}", button);
+        cx.resources.receiver.lock(|r| {
+            r.pin().clear_interrupt_pending_bit();
 
-                let key = button_to_mediakey(button);
+            if let Some(last) = LAST {
+                let dt = *now.checked_duration_since(&last).unwrap().integer();
 
-                if let Err(err) = cx.spawn.keydown(key) {
-                    rprintln!("Failed to spawn keydown: {:?}", err);
+                if let Ok(Some(button)) = r.event_remotecontrol::<Apple2009>(dt as usize) {
+                    rprintln!("{:?}", button);
+                    let key = super::button_to_mediakey(button);
+                    keydown::spawn(key).unwrap();
                 }
-            }
-            Ok(None) => {}
-            Err(err) => {
-                rprintln!("Error: {:?}", err);
-            }
-        }
+            };
+        });
+
+        *LAST = Some(now);
     }
 
-    #[task(resources = [usb_kbd], schedule = [keyup])]
+    #[task(resources = [usb_kbd])]
     fn keydown(mut cx: keydown::Context, key: MediaKey) {
-        rprintln!("keydown  @ {:?}", Instant::now());
-        cx.resources.usb_kbd.lock(|kbd| send_keycode(kbd, key));
+        cx.resources
+            .usb_kbd
+            .lock(|kbd| super::send_keycode(kbd, key));
 
-        if let Err(err) = cx.schedule.keyup(Instant::now() + 4_000_000.cycles()) {
-            rprintln!("Failed to schedule keyup: {:?}", err);
-        }
+        keyup::spawn_after(Milliseconds(20_u32)).unwrap();
     }
 
     #[task(resources = [usb_kbd])]
     fn keyup(mut cx: keyup::Context) {
-        rprintln!("keyup  @ {:?}", Instant::now());
         cx.resources
             .usb_kbd
-            .lock(|kbd| send_keycode(kbd, MediaKey::Zero));
+            .lock(|kbd| super::send_keycode(kbd, MediaKey::Zero));
     }
-
-    extern "C" {
-        fn USART1();
-    }
-};
+}
 
 fn usb_poll<B: bus::UsbBus>(
     usb_dev: &mut UsbDevice<'static, B>,
