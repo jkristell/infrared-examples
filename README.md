@@ -1,5 +1,5 @@
 # Examples
 
-The examples have moved into the Infrared repository
+The examples are now kept in the infraed repo.
 
-https://github.com/jkristell/infrared/examples
+https://github.com/jkristell/infrared/tree/master/examples
