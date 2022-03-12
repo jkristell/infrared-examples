@@ -1,7 +1,5 @@
 # Examples
 
-## stm32f103-bluepill
- - receiver.rs - Receiver
- - multireceiver.rs - Receiver for multiple remotes
- - transmitter.rs - Rc5 CD-player transmitter example
-   
+The examples are now kept in the infraed repo.
+
+https://github.com/jkristell/infrared/tree/master/examples
